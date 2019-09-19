@@ -2,9 +2,13 @@ import sys
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 
+from .identify import get_caller
+from .library import Local
+
 class Task():
   def __init__(self, model):
     self.model = model
+    self.repo = Local(get_caller())
     # determine capabilities depending on the passed arguments and defined functions
 
   def train(self):
@@ -27,6 +31,7 @@ class Task():
     If imported, this must be detected and behavior be accordingly different.
     """
     # add self to library
+    self.repo.commit(message=comment if comment else "no comment")
     # acquire identity
     # detect being imported, return self then
     # otherwise try parsing sys args
