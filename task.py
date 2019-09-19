@@ -9,6 +9,7 @@ class Task():
   def __init__(self, model):
     self.model = model
     self.repo = Local(get_caller())
+    self.identity = None
     # determine capabilities depending on the passed arguments and defined functions
 
   def train(self):
@@ -33,6 +34,7 @@ class Task():
     # add self to library
     self.repo.commit(message=comment if comment else "no comment")
     # acquire identity
+    self.identity = self.repo.get_identity()
     # detect being imported, return self then
     # otherwise try parsing sys args
     # if none, present the menu

@@ -139,5 +139,14 @@ class Local():
     link = self.global_repo.remotes[0]
     link.pull('master')
 
+  def get_identity(self):
+    """Returns hexsha of the latest commit.
+
+    task.Task uses this as its identity.
+    """
+    for commit in self.local_repo.iter_commits():
+      # commits are stored latest-first
+      return commit.hexsha
+
 
 library = Library()
