@@ -24,6 +24,8 @@ class Library():
   """
   def __init__(self):
     """Load all known experiments."""
+    self.is_importing = False # import mechanism
+    self.import_task = None   # import mechanism
     self.data_path = config['data_path']
     e_names = os.listdir(self.data_path)
     e_paths = [os.path.join(self.data_path, c) for c in e_names]
