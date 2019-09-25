@@ -2,13 +2,14 @@ import sys
 
 from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
 
+from .library import library
+from .experiment import LocalView
 from .identify import get_caller, is_imported
-from .library import library, Local
 
 class Task():
   def __init__(self, model):
     self.model = model
-    self.repo = Local(get_caller())
+    self.repo = None
     self.identity = None
     # determine capabilities depending on the passed arguments and defined functions
 
@@ -50,6 +51,7 @@ class Task():
       return
     # If it's not an import, the script must've been run manually. In this case
     # add self to library, acquire identity and run a selected task.
+    self.repo = LocalView(get_caller())
     self.repo.commit(message=comment if comment else "no comment")
     self.identity = self.repo.get_identity()
     # Check if there are any CLI arguments or should we print a menu.
