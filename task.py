@@ -44,7 +44,7 @@ class Task():
       # If it's the library who imports us, give it a handle to ourselves.
       # In other case - do nothing.
       if library.is_importing:
-        library.import_task = self
+        library.imported_obj = self
       else:
         pass
       # No matter who, stop processing at this point.

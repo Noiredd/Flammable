@@ -22,7 +22,7 @@ class Library():
       self.set_instance(self)
     # proceed with the launch
     self.is_importing = False # import mechanism
-    self.import_task = None   # import mechanism
+    self.imported_obj = None  # import mechanism
     self.storage_path = config['data_path']
     self.experiments = self.load_experiments()
 

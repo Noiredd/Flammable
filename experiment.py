@@ -1,7 +1,9 @@
 import datetime
+import importlib
 import json
 import os
 import random
+import sys
 
 import git
 
@@ -22,7 +24,8 @@ class Experiment():
     """Load experiment info given a path to its folder."""
     if not self.verify(path):
       raise RuntimeError('Not a valid Experiment directory.')
-    self.repo = git.Repo(os.path.join(path, 'repo'))
+    self.repo_path = os.path.join(path, 'repo')
+    self.repo = git.Repo(self.repo_path)
     self.data_path = os.path.join(path, 'data.json')
     self.snapshots = self.load_data()
     # TODO: allow retrieval of snapshots by date, by ID, by whatever
@@ -76,6 +79,34 @@ class Experiment():
     self.save_data()
     self.ids.add(snapshot.sid)
     return snapshot
+
+  def import_snapshot(self, snapshot):
+    """Retrieves the Task that was executed at the given snapshot.
+
+    This alters the global repository by performing a checkout and a reset.
+    No data will be lost, as long as it has been committed.
+    """
+    if snapshot.sid not in self.ids:
+      raise RuntimeError('This snapshot does not belong to the Experiment!')
+    library.is_importing = True
+    # check out the relevant commit
+    self.repo.head.reference = self.repo.commit(snapshot.hexsha)
+    self.repo.head.reset(index=True, working_tree=True)
+    # import the correct file from the correct location
+    backup_path = sys.path
+    sys.path = [self.repo_path]
+    module_name, _ = os.path.splitext(snapshot.filename)
+    # the imported module triggers the other end of the mechanism
+    importlib.import_module(module_name)
+    # return to the original master head
+    self.repo.head.reference = self.repo.heads[0]
+    self.repo.head.reset(index=True, working_tree=True)
+    # retrieve the imported object and clean up
+    task_object = library.imported_obj
+    library.imported_obj = None
+    library.is_importing = False
+    sys.path = backup_path
+    return task_object
 
   @classmethod
   def new(self, path):
@@ -259,3 +290,4 @@ class Snapshot():
 # the classes - because library.py does import from this file as well.
 # https://stackoverflow.com/a/40094439
 from .library import library
+from .task import Task
