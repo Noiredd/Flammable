@@ -52,7 +52,7 @@ class Task():
     # If it's not an import, the script must've been run manually. In this case
     # add self to library, acquire identity and run a selected task.
     self.repo = LocalView(get_caller())
-    self.repo.commit(message=comment if comment else "no comment")
+    self.repo.make_snapshot(message=comment if comment else "none")
     self.identity = self.repo.get_identity()
     # Check if there are any CLI arguments or should we print a menu.
     try:

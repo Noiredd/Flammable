@@ -11,26 +11,72 @@ class Experiment():
   An experiment is given by a folder of a particular layout:
     exp_dir/
       repo        # git repository with experiment code snapshots
-      assets      # all data produced by each version of the experiment
-        fe3a3b7   # content produced by snapshot fe3a3b7
-        32b6ee4
-        e3cee37
+      assets      # all data produced by each snapshot of the experiment
+        20190926-123819-ebyjb
+        20190926-124033-xvznd
         ...
       data.json   # metadata file (TODO)
   """
 
   def __init__(self, path):
-    """Load experiment info given a path to its folder.
+    """Load experiment info given a path to its folder."""
+    if not self.verify(path):
+      raise RuntimeError('Not a valid Experiment directory.')
+    self.repo = git.Repo(os.path.join(path, 'repo'))
+    self.data_path = os.path.join(path, 'data.json')
+    self.snapshots = self.load_data()
+    # TODO: allow retrieval of snapshots by date, by ID, by whatever
+    self.ids = set(snapshot.sid for snapshot in self.snapshots)
 
-    Optionally allow passing Repo objects as arguments (faster sometimes).
+  def verify(self, path):
+    """Ensure the given path points to a well-formed experiment directory."""
+    if not os.path.isdir(os.path.join(path, 'repo')):
+      return False
+    if not os.path.isdir(os.path.join(path, 'repo')):
+      return False
+    if not os.path.isfile(os.path.join(path, 'data.json')):
+      return False
+    return True
+
+  def load_data(self):
+    """Load snapshots' metadata from a JSON file."""
+    snapshots = []
+    with open(self.data_path, 'r') as source:
+      for line in source.readlines():
+        snapshots.append(Snapshot.from_json(line.strip('\n')))
+    return snapshots
+
+  def save_data(self):
+    """Save snapshots' metadata to a JSON file."""
+    with open(self.data_path, 'w') as target:
+      for snapshot in self.snapshots:
+        target.write(snapshot.to_json())
+        target.write('\n')
+
+  def create_snapshot(self, message, filename):
+    """Create an experiment snapshot and append to the list.
+
+    TODO: This should be atomic with respect to the on-disk data file, in cases
+    when multiple instances of the same Experiment are in use (perhaps the user
+    trains multiple versions of the experiment at the same time).
     """
-    if isinstance(path, git.repo.base.Repo):
-      self.repo = path
-    else:
-      self.repo = git.Repo(os.path.join(path, 'repo'))
-    # TODO: assert existence of all required items
-    # TODO: metadata
-  
+    # first we need to know the SHA of the most recent commit
+    for commit in self.repo.iter_commits():
+      hexsha = commit.hexsha
+      break # they're stored latest-first, so we can stop immediately
+    # create the object
+    snapshot = Snapshot.create(
+      parent=self,
+      comment=message,
+      hexsha=hexsha,
+      filename=filename
+    )
+    # add to the registry
+    self.snapshots.append(snapshot)
+    self.save_data()
+    self.ids.add(snapshot.sid)
+    return snapshot
+
   @classmethod
   def new(self, path):
     """Initialize a new experiment in a given directory.
@@ -40,8 +86,9 @@ class Experiment():
     os.mkdir(path)
     os.mkdir(os.path.join(path, 'repo'))
     os.mkdir(os.path.join(path, 'assets'))
+    open(os.path.join(path, 'data.json'), 'w').close()
     repo = git.Repo.init(os.path.join(path, 'repo'))
-    return self(repo)
+    return self(path)
 
 
 class LocalView():
@@ -64,7 +111,8 @@ class LocalView():
     self.local_repo = self.get_local()
     # TODO: assert there isn't a mismatch between repos - e.g. we're not trying
     # to overwrite a repo, or pull between desynchronized repos
-  
+    self.snapshot = None
+
   def get_local(self):
     """Retrieve an existing repository or initialize a new one.
 
@@ -72,43 +120,47 @@ class LocalView():
     """
     try:
       repo = git.Repo(self.local_dir)
-      print('obtained an existing repo')
     except git.exc.InvalidGitRepositoryError:
       repo = git.Repo.init(self.local_dir)
       self.global_exp.repo.create_remote('local', self.local_dir)
-      print('created a new repo')
     return repo
 
+  def make_snapshot(self, message):
+    """Commit changes and synchronize the global state."""
+    if self.commit(message):
+      self.synchronize()
+    self.snapshot = self.global_exp.create_snapshot(message, self.call_file)
+
   def commit(self, message):
-    """Commit any changes to the local repository and syncs with library."""
-    # collect the changes
+    """Commit any changes to the local repository."""
+    # check for and collect the changes
     is_changed = len(self.local_repo.index.diff(None)) > 0
     has_untracked = len([
       f for f in self.local_repo.untracked_files
       if f not in self.EXCLUDE and not any(f.startswith(ex) for ex in self.EXCLUDE)
     ]) > 0
+    should_commit = is_changed or has_untracked
     # commit changes (if any) to the local repository
-    if is_changed or has_untracked:
+    if should_commit:
       self.local_repo.index.add([
         item for item in os.listdir(self.local_dir) if item not in self.EXCLUDE
       ])
       self.local_repo.index.commit(message)
-    else:
-      return
-    # synchronize with global repo (it's better to pull from the global side
-    # rather than push from the local, because a local->global link allows
-    # manipulation of the global (system-owned) repository by the user)
+    return should_commit
+
+  def synchronize(self):
+    """Synchronize with the global repository.
+
+    It's better to pull from the global side (with local as a remote) because
+    if global was local's remote, the user could (even accidentally) make some
+    damage on the library side.
+    """
     link = self.global_exp.repo.remotes[0]
     link.pull('master')
 
   def get_identity(self):
-    """Returns hexsha of the latest commit.
-
-    task.Task uses this as its identity.
-    """
-    for commit in self.local_repo.iter_commits():
-      # commits are stored latest-first
-      return commit.hexsha
+    """Returns a timestamp and internal ID of the current snapshot."""
+    return '{}-{}'.format(self.snapshot.timestamp, self.snapshot.sid)
 
 
 class Snapshot():
@@ -135,11 +187,11 @@ class Snapshot():
   @classmethod
   def create(cls, parent:Experiment, comment, hexsha, filename):
     """Generate unique ID and construct a new Snapshot."""
-    timestamp = self.get_datetime()
+    timestamp = cls.get_datetime()
     # ensure uniqueness of the ID
-    sid = self.generate_id()
+    sid = cls.generate_id()
     while sid in parent.ids:
-      sid = self.generate_id()
+      sid = cls.generate_id()
       # probability of ending this loop is the lower, the more IDs are already
       # recorded, until there are 11881376 snapshots and it will never complete
     # now we can build the object
@@ -193,7 +245,7 @@ class Snapshot():
   def get_datetime():
     """Return the current date & time as a string."""
     now = datetime.datetime.now()
-    return '{}{}{}-{}{}{}'.format(
+    return '{}{:0>2}{:0>2}-{:0>2}{:0>2}{:0>2}'.format(
       now.year,
       now.month,
       now.day,
