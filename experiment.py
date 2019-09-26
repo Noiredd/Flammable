@@ -1,4 +1,7 @@
+import datetime
+import json
 import os
+import random
 
 import git
 
@@ -106,6 +109,98 @@ class LocalView():
     for commit in self.local_repo.iter_commits():
       # commits are stored latest-first
       return commit.hexsha
+
+
+class Snapshot():
+  """Metadata of a single run of an experiment.
+
+  Each snapshot corresponds to one commit in the experiment repository. This is
+  not a 1:1 relation however, as multiple snapshots can be taken at one commit.
+  A snapshot represents a run of the experiment: there can be multiple repeated
+  runs with the same settings, there might be several runs of different scripts
+  at the same commit. User might even define their task to accept external args
+  (e.g. from CLI) and perform experiments by making runs at different settings.
+  All of this information is to be stored in a snapshot which provides mappings
+  to specific commits and filenames, enabling later retrieval from the library.
+  TODO: enable storing output information (e.g. final metrics) in the snapshot.
+  """
+  def __init__(self, sid, timestamp, comment, hexsha, filename):
+    self.sid = sid
+    self.timestamp = timestamp
+    self.comment = comment
+    self.hexsha = hexsha
+    self.filename = filename
+    self.metrics = {} # TODO, as well as settings maybe
+
+  @classmethod
+  def create(cls, parent:Experiment, comment, hexsha, filename):
+    """Generate unique ID and construct a new Snapshot."""
+    timestamp = self.get_datetime()
+    # ensure uniqueness of the ID
+    sid = self.generate_id()
+    while sid in parent.ids:
+      sid = self.generate_id()
+      # probability of ending this loop is the lower, the more IDs are already
+      # recorded, until there are 11881376 snapshots and it will never complete
+    # now we can build the object
+    return cls(
+      sid=sid,
+      timestamp=timestamp,
+      comment=comment,
+      hexsha=hexsha,
+      filename=filename
+    )
+
+  @classmethod
+  def from_json(cls, string):
+    """Deserialize the object from its JSON representation."""
+    items = json.loads(string)
+    return cls(
+      sid=items[0],
+      timestamp=items[1],
+      comment=items[2],
+      hexsha=items[3],
+      filename=items[4],
+    )
+
+  def to_json(self):
+    """Serialize to JSON."""
+    return json.dumps([
+      self.sid,
+      self.timestamp,
+      self.comment,
+      self.hexsha,
+      self.filename
+    ])
+
+  @staticmethod
+  def generate_id():
+    """Generate a random 5-digit base-26 number, represent as string."""
+    B = 26
+    N = 5
+    number = random.randint(0, B**N - 1)
+    digits = []
+    for i in range(N):
+      d = number % B
+      digits.append(d)
+      number -= d
+      number //= B
+    return ''.join(
+      chr(ord('a') + d) for d in reversed(digits)
+    )
+
+  @staticmethod
+  def get_datetime():
+    """Return the current date & time as a string."""
+    now = datetime.datetime.now()
+    return '{}{}{}-{}{}{}'.format(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      now.second
+    )
 
 
 # Avoid a circular import by deferring the library load until after defining
