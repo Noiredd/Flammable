@@ -88,7 +88,7 @@ class Experiment():
     """
     if snapshot.sid not in self.ids:
       raise RuntimeError('This snapshot does not belong to the Experiment!')
-    library.is_importing = True
+    Task.init_import()
     # check out the relevant commit
     self.repo.head.reference = self.repo.commit(snapshot.hexsha)
     self.repo.head.reset(index=True, working_tree=True)
@@ -102,9 +102,7 @@ class Experiment():
     self.repo.head.reference = self.repo.heads[0]
     self.repo.head.reset(index=True, working_tree=True)
     # retrieve the imported object and clean up
-    task_object = library.imported_obj
-    library.imported_obj = None
-    library.is_importing = False
+    task_object = Task.retrieve_instance()
     sys.path = backup_path
     return task_object
 

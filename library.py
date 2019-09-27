@@ -9,20 +9,13 @@ class Library():
   Each experiment has its own folder in the storage (storage_path).
   Layouts of those folders are defined in the class Experiment.
   """
-  instance = None
-  @classmethod
-  def set_instance(cls, instance):
-    cls.instance = instance
-
   def __init__(self):
-    """Initialize the import mechanism and load all the experiments."""
+    """Load all the experiments."""
     if self.instance:
       raise RuntimeError("There can only be a single Library instantiated!")
     else:
       self.set_instance(self)
     # proceed with the launch
-    self.is_importing = False # import mechanism
-    self.imported_obj = None  # import mechanism
     self.storage_path = config['data_path']
     self.experiments = self.load_experiments()
 
