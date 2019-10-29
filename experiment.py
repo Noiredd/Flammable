@@ -104,7 +104,18 @@ class Experiment():
     # retrieve the imported object and clean up
     task_object = Task.retrieve_instance()
     sys.path = backup_path
+    # before returning the object, endow it with identity
+    # TODO is this enough? shouldn't we link with the whole Experiment instance???
+    task_object.identity = snapshot.create_identity_string()
     return task_object
+
+  def get_snapshot_by_id(self, sid):
+    """Returns a snapshot by its ID, if such exists."""
+    if sid not in self.ids:
+      return None
+    for snap in self.snapshots:
+      if snap.sid == sid:
+        return snap
 
   @classmethod
   def new(self, path):
@@ -189,7 +200,7 @@ class LocalView():
 
   def get_identity(self):
     """Returns a timestamp and internal ID of the current snapshot."""
-    return '{}-{}'.format(self.snapshot.timestamp, self.snapshot.sid)
+    return self.snapshot.create_identity_string()
 
 
 class Snapshot():
@@ -283,9 +294,12 @@ class Snapshot():
       now.second
     )
 
+  def create_identity_string(self):
+    return '{}-{}'.format(self.timestamp, self.sid)
+
 
 # Avoid a circular import by deferring the library load until after defining
 # the classes - because library.py does import from this file as well.
 # https://stackoverflow.com/a/40094439
 from .library import library
-from .task import Task
+from .task import BaseTask as Task

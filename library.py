@@ -11,11 +11,6 @@ class Library():
   """
   def __init__(self):
     """Load all the experiments."""
-    if self.instance:
-      raise RuntimeError("There can only be a single Library instantiated!")
-    else:
-      self.set_instance(self)
-    # proceed with the launch
     self.storage_path = config['data_path']
     self.experiments = self.load_experiments()
 
@@ -48,3 +43,6 @@ class Library():
 
 
 library = Library()
+# Simple prevention against double-instantiating/
+# Of course, you can still do lib2 = library.__class__() but... why?
+del Library
