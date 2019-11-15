@@ -5,7 +5,7 @@ import torch
 from .task import BaseTask
 
 class PytorchTask(BaseTask):
-  """Basic, abstract skeleton of a PyTorch ML model.
+  """Basic, abstract skeleton of a PyTorch-based ML model.
 
   Following the basic assumption, there are 3 "states" that a model can be in.
   Those are: training, testing and evaluation. This class implements these in a
@@ -45,10 +45,6 @@ class PytorchTask(BaseTask):
     self.model = model
     self.optim = None
     self.criterion = None
-    self.train_data = {
-      'snapshots': [],
-      'metrics': {},
-    }
     # Hyperparameters
     self.device = None
     self.epochs = None

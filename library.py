@@ -35,11 +35,8 @@ class Library():
       return repo
   
   def get_experiment(self, name):
-    """Retrieve an experiment by name if it exists, otherwise create a new one."""
-    repo = self.experiments.get(name, None)
-    if not repo:
-      repo = self.add_experiment(name)
-    return repo
+    """Retrieve an experiment by name if it exists."""
+    return self.experiments.get(name, None)
 
 
 library = Library()

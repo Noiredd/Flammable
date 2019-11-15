@@ -1,6 +1,7 @@
-import sys
+import argparse
+import os
 
-from .experiment import LocalView
+from .library import library
 from .identify import get_caller, is_imported
 
 class BaseTask():
@@ -26,12 +27,13 @@ class BaseTask():
   and run "main" at the end of their script. Everything else is handled by this
   class.
   """
+
   _library_import = False
   _imported_object = None
 
   def __init__(self):
-    self.repo = None
-    self.identity = None
+    self.experiment = None
+    self.snapshot = None
 
   # All backends have to implement these
 
@@ -47,52 +49,78 @@ class BaseTask():
   def server(self):
     raise NotImplementedError
 
-  # Common behaviors
+  # Interface
 
-  def main(self, comment=None):
-    """Decide what to do depending on how it was called.
+  def main(self, message=None):
+    """Detect run mode and pass execution to a dedicated method.
 
-    Script defining the task could've either been simply executed or imported.
-    Behaviour in either case is significantly different. If the script is being
-    executed, the user has passed some command line arguments informing what to
-    do. There are two options if the script was imported: EITHER the library is
-    accessing a model snapshot (user is using the API), in which case the model
-    (BaseTask descendant) is anonymous from the library's point of view, and so
-    it has to be passed to it via some special channel (in this case it will be
-    stored as a class-instance member, because the library has direct access to
-    to class instance); ALTERNATIVELY the user is importing the model manually,
-    in which case no additional action should be taken, as the user should know
-    the literal name of the object they're importing.
+    Script defining the specific task could be executed in 3 different ways:
+    * directly called from the command line (most likely the experiment is
+      being worked on),
+    * by importlib during an import from the Library (common thing when running
+      past versions of the experiment),
+    * or by a direct import by the user in some other script.
     """
-    # detect being imported
+    # Detect being imported and behave accordingly if it's a library import
     if is_imported():
-      # If it's the library who imports us, store a static (class-level) handle
-      # to the current instance. In other case do nothing.
       if self.is_library_import():
-        self.register_instance(self)
-        # TODO: Shouldn't we in this case also link it with its parent Experiment???
-        # e.g. user imports some old object to test it again
-      else:
-        pass
-      # No matter who, stop processing at this point.
-      return
-    # If it's not an import, the script must've been run manually. In this case
-    # add self to library, acquire identity and run a selected task.
-    self.repo = LocalView(get_caller())
-    self.repo.make_snapshot(message=comment if comment else "none")
-    self.identity = self.repo.get_identity()
-    # Parse the CLI arguments (TODO: argparse)
-    command = sys.argv[1]
-    if command == 'train':
-      self.train()
-    elif command == 'test':
-      self.test()
-    elif command == 'eval':
-      self.eval(sys.argv[2])
-    elif command == 'server':
-      self.server()
+        self.api_main()
     else:
-      print('Unknown command')
+      # otherwise assume being run from the command line
+      return self.cli_main(message=message)
+
+  def cli_main(self, message):
+    """Training, testing, etc. directly from the CLI.
+
+    Communicates with the library backend to add the model to a repository.
+    """
+    # Get the complete path to a file from which "main" was called
+    this_path = get_caller(delta=1)
+    # Folder name without extension is the name of the experiment
+    this_dir, _ = os.path.split(this_path)
+    _, exp_name = os.path.split(this_dir)
+    # Fetch the experiment instance from the library
+    self.experiment = library.get_experiment(exp_name)
+    if not self.experiment:
+      # Try creating a new one if it doesn't exist yet
+      self.experiment = library.add_experiment(exp_name)
+      if not self.experiment:
+        raise RuntimeError("Unable to create a new experiment \"{}\".".format(exp_name))
+    # Connect the instance with the local repository
+    self.experiment.link_local_repo(this_path)
+    # Check what command was requested via CLI
+    args = self.cli_parse()
+    if args.command == 'train':
+      return self.cli_train(args=args, message=message)
+
+  def cli_parse(self):
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(prog='MAGEM')
+    parser.add_argument('command', choices=['train']) # XXX just for now
+    parser.add_argument('--force', action='store_true')
+    return parser.parse_args()
+
+  def cli_train(self, args, message):
+    """Training command logic."""
+    # Check for changes in the repository
+    is_changed = self.experiment.check_changes()
+    if is_changed:
+      # Request creation of a new commit and snapshot
+      self.snapshot = self.experiment.make_snapshot(message=message)
+      self.train()
+    elif args.force:
+      # Forcing means retraining the last snapshot
+      self.snapshot = self.experiment.get_last_snapshot()
+      self.snapshot.reset()
+      self.train()
+    else:
+      # By default, training is not allowed unless there were some changes
+      print("No changes detected. If you wish to retrain the last version, run with --force")
+      return
+
+  def api_main(self):
+    """Export the instance for external use through the library."""
+    self.register_instance(self)
 
   @classmethod
   def is_library_import(cls):
