@@ -4,47 +4,137 @@ import torch
 
 from .task import BaseTask
 
-class PytorchTask(BaseTask):
-  """Basic, abstract skeleton of a PyTorch-based ML model.
+class PytorchTrainable():
+  """Mixin for training-related abstractions.
 
-  Following the basic assumption, there are 3 "states" that a model can be in.
-  Those are: training, testing and evaluation. This class implements these in a
-  modular, abstract way, requiring the user to define only the most fundamental
-  functions for their model, but allowing them to override the default behavior
-  on any level. This is done by defining a meta-algorithm for each state.
-
-  Easiest to explain this on an example. Let's do it for "training" function.
-  The most high level algorithm for training is:
+  Realizes the most high-level idea of a training process, defined as follows:
     * create the data source
     * create the optimization criterion
     * create the optimizer
     * repeat the following for N epochs:
-      * repeat the following for each data point (or batch)
-        * pre-process the data sample
+      * iterate over the data source, each time doing the following:
+        * prepare the data sample
         * perform the forward pass for this sample, obtaining some output
-        * perform the backward pass for this output and known label, obtaining
-          some loss metric
-        * update the model parameters accordingly
-  PytorchTask encapsulates each of these behaviors in a specific function. Only
-  the first 3 need to be defined by the user (along with the model itself), the
-  rest is already implemented but in a very basic way (see metod "train"). User
-  dealing with a simple task can therefore start experimenting right away. When
-  the task becomes more complex, user can alter the algorithm on any level they
-  want, simply by overriding the respective function.
-  If the forward pass is no longer a trivial model __call__ but requires a more
-  sophisticated procedure, one overrides forward_pass and everything will "just
-  work". If a single learning "step" is no longer a simple function like above,
-  the whole thing can be overridden. Even the "train" function can be redefined
-  if need arises.
+        * perform the backward pass for this output and the original sample,
+          obtaining some loss metric, and back-propagate it
+        * update the model parameters
+  Might be best to read it from the bottom, as the most low-level functions are
+  higher up, and the most abstract algorithm is below.
 
-  Same concept applies to testing and evaluation behaviors (see the functions).
+  When deriving from PytorchTrainable (or rather PytorchTask) one still needs
+  to implement some of the functions - see "User code" area.
+
+  Warning: due to dependencies on several self-bound attributes and methods
+  (e.g. self.forward() or self.device) this class alone makes little sense. It
+  shall be used only when mixed into the PytorchTask composite class.
+  """
+
+  # User code
+
+  def get_training_data(self):
+    """User code: should return a training data loader.
+
+    By default it is expected that the loader will yield 2-tuples containing
+    a training sample and a corresponding label. This expectation is realized
+    by prepare_train and forward_pass_train (see the code).
+    """
+    raise NotImplementedError
+
+  def get_criterion(self):
+    """User code: should return a loss function object."""
+    raise NotImplementedError
+
+  def get_optimizer(self):
+    """User code: should return an optimizer object."""
+    raise NotImplementedError
+
+  # Meta-algorithm
+
+  def prepare_train(self, sample):
+    """Default sample preprocessing before feeding to the model at training."""
+    data, label = sample
+    data.to(self.device)
+    label.to(self.device)
+    return data, label
+
+  def forward_train(self, sample):
+    """Default forward pass during training."""
+    data, _ = sample
+    output = self.forward(data)
+    return output
+
+  def backward(self, output, sample):
+    """Default backward pass."""
+    _, label = sample
+    loss = self.criterion(output, label)
+    loss.backward()
+    return loss
+
+  def step(self, sample):
+    """Default meta-algorithm for a single iteration over the training dataset."""
+    self.model.train()
+    self.optimizer.zero_grad()
+    self.sample = self.prepare_train(sample)
+    self.output = self.forward_train(self.sample)
+    self.loss = self.backward(self.output, self.sample)
+    self.optimizer.step()
+    # TODO: iteration-level book-keeping
+
+  def epoch(self, dataset):
+    """Default meaning of an 'epoch' (single iteration over the dataset)."""
+    for sample in dataset:
+      self.step(sample)
+    # TODO: epoch-level book-keeping
+    # TODO: validation pass
+
+  def train(self):
+    """Default training meta-algorithm."""
+    # Initialize required components (user-defined)
+    data = self.get_training_data()
+    self.criterion = self.get_criterion()
+    self.optimizer = self.get_optimizer()
+    # Run the outer loop
+    for self.epoch_i in range(self.epochs):
+      self.epoch(data)
+    # TODO: summary book-keeping
+    # TODO: save the model file
+
+
+class PytorchTask(BaseTask, PytorchTrainable):
+  """Basic, abstract skeleton of a PyTorch-based ML model.
+
+  Following the basic assumption, there are 3 "states" that a model can be in.
+  Those are: training, testing and evaluation. This class (or rather the mixins
+  that it consists of) defines these states in an abstract, modular way: by
+  implementing a default meta-algorithm and breaking it down into several basic
+  building block functions, each realizing a specific portion of the algorithm.
+  The user can either use the simple, default version of the algorithm, or they
+  can define their own. Due to the highly abstract structure, one can override
+  the algorithm on any level needed, from the small changes e.g. "what it means
+  to forward-propagate a data sample" to a complete rewrite of the algorithm.
+
+  See documentation on each individual mixin for details.
   """
   def __init__(self, model):
     super(PytorchTask, self).__init__()
     # Constituent objects
     self.model = model
-    self.optim = None
+    # Training-time objects
     self.criterion = None
+    self.optimizer = None
+    self.dataset = None
+    self.epoch_i = None
+    self.sample = None
+    self.output = None
+    self.loss = None
     # Hyperparameters
     self.device = None
     self.epochs = None
+
+  # General model abstractions
+
+  def forward(self, data):
+    """Default forward pass through the model."""
+    return self.model(data)
+
+  # TODO: save/read model files (and register them with Snapshot)
