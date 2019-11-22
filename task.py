@@ -70,9 +70,23 @@ class BaseTask():
       return self.cli_main(message=message)
 
   def cli_main(self, message):
-    """Training, testing, etc. directly from the CLI.
+    """Parse command line input and execute the entire logic.
 
-    Communicates with the library backend to add the model to a repository.
+    Uses the library backend to retrieve or create an Experiment instance that
+    this task belongs to, along with the local repository where the user is
+    working on it. Then makes a series of checks to execute the logic depending
+    on the specific command passed by the user. There are 4 main commands, this
+    is their (short and rough - see specific functions for details) overview:
+      * "train":  if there were changes in task code, commit them, create a new
+                  snapshot, and start training; otherwise exit, unless some
+                  special flag (--retrain, --force) was passed,
+      * "test":   if the current version of the code has a corresponding and
+                  trained but untested snapshot, test it; otherwise exit,
+                  unless some special flag (--retest, --ignore) was passed,
+      * "eval":   TBD
+      * "server": TBD
+      + "amend":  only commits changes (if any) onto an existing snapshot,
+      + "status": checks the status of the repository/snapshot,
     """
     # Get the complete path to a file from which "main" was called
     this_path = get_caller(delta=1)
@@ -92,35 +106,72 @@ class BaseTask():
     args = self.cli_parse()
     if args.command == 'train':
       return self.cli_train(args=args, message=message)
+    elif args.command == 'test':
+      return self.cli_test(args=args)
+    elif args.command == 'eval':
+      raise NotImplementedError("This is not ready yet, TODO!")
+    elif args.command == 'server':
+      raise NotImplementedError("This is not ready yet, TODO!")
 
   def cli_parse(self):
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(prog='MAGEM')
     parser.add_argument('command', choices=['train']) # XXX just for now
-    parser.add_argument('--force', action='store_true')
+    parser.add_argument('--retrain', action='store_true', help="[Training\
+      only] Reset the existing snapshot and train it from scratch.")
+    parser.add_argument('--force', action='store_true', help="[Training only]\
+      Create a new snapshot even if there were no changes in the code.")
+    parser.add_argument('--retest', action='store_true', help="[Testing only]\
+      Test the snapshot again, overwriting the previous results.")
+    parser.add_argument('--ignore', action='store_true', help="[Testing only]\
+      Ignore that the code was changed since the training, test anyway.")
     return parser.parse_args()
 
   def cli_train(self, args, message):
-    """Training command logic."""
+    """Training command logic.
+
+    The main assumption is that a Snapshot instance represents a single trained
+    version of the experiment (as the code looked like at some point in time).
+    A single version of the code can be trained multiple times, but each of the
+    resulting models is encapsulated by a separate Snapshot instance. Therefore
+    we employ the following logic:
+      * if there were changes in the code: commit them, create a Snapshot, run
+        "train",
+      * if there were no changes but --retrain was given: fetch the previous
+        Snapshot, reset it, and run "train" on it again,
+      * if there were no changes but --force was given: create a new Snapshot
+        referring to the most recent commit, and run "train".
+    """
     # Check for changes in the repository
     is_changed = self.experiment.check_changes()
     if is_changed:
-      # Request creation of a new commit and snapshot
+      # Request creation of a new commit and snapshot, and train
       self.snapshot = self.experiment.make_snapshot(message=message)
       self.train()
-    elif args.force:
-      # Forcing means retraining the last snapshot
+    elif args.retrain:
+      # Reset and train the last snapshot
       self.snapshot = self.experiment.get_last_snapshot()
       self.snapshot.reset()
       self.train()
+    elif args.force:
+      # Force creating a new snapshot, and train
+      self.snapshot = self.experiment.make_snapshot(message=message)
+      self.train()
     else:
       # By default, training is not allowed unless there were some changes
-      print("No changes detected. If you wish to retrain the last version, run with --force")
+      print("No changes detected.",
+            "If you wish to train a new snapshot anyway, run with --force.",
+            "If you wish to retrain the last snapshot, run with --retrain.")
       return
+
+  def cli_test(self, args):
+    """Testing command logic."""
 
   def api_main(self):
     """Export the instance for external use through the library."""
     self.register_instance(self)
+
+  # API import mechanics
 
   @classmethod
   def is_library_import(cls):
