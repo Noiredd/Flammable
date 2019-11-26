@@ -53,8 +53,8 @@ class PytorchTrainable():
   def prepare_train(self, sample):
     """Default sample preprocessing before feeding to the model at training."""
     data, label = sample
-    data.to(self.device)
-    label.to(self.device)
+    data = data.to(self.device)
+    label = label.to(self.device)
     return data, label
 
   def forward_train(self, sample):
@@ -89,6 +89,7 @@ class PytorchTrainable():
 
   def train(self):
     """Default training meta-algorithm."""
+    self.model.to(self.device)
     # Initialize required components (user-defined)
     data = self.get_training_data()
     self.criterion = self.get_criterion()
@@ -100,7 +101,7 @@ class PytorchTrainable():
     # TODO: save the model file
 
 
-class PytorchTask(BaseTask, PytorchTrainable):
+class PytorchTask(PytorchTrainable, BaseTask):
   """Basic, abstract skeleton of a PyTorch-based ML model.
 
   Following the basic assumption, there are 3 "states" that a model can be in.
@@ -112,6 +113,11 @@ class PytorchTask(BaseTask, PytorchTrainable):
   can define their own. Due to the highly abstract structure, one can override
   the algorithm on any level needed, from the small changes e.g. "what it means
   to forward-propagate a data sample" to a complete rewrite of the algorithm.
+
+  Sometimes it is only needed to add something to the existing function, not
+  rewrite it from scratch. The suggested way of doing this is to override the
+  function, implement the desired behavior there and then use super() to call
+  the original function.
 
   See documentation on each individual mixin for details.
   """

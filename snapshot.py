@@ -5,8 +5,8 @@ class Snapshot():
   """Data and metadata of a single version of an experiment.
 
   Each Snapshot corresponds to a specific point in the code history (commit).
-  Each Snapshot stores at most a single trained version of an experiment (with
-  the exception of multiple intermediate parameter files).
+  Each Snapshot stores at most a single trained version of an experiment (but
+  multiple intermediate parameter files).
 
   Each Snapshot lives in its own folder ("root_path"), which is however created
   (and, possibly, destroyed) by its parent - an Experiment.
@@ -15,8 +15,8 @@ class Snapshot():
       a new commit,
     * loading a previously created Snapshot.
   This first way must be performed using the "create" class method, passing all
-  the required data. This lets the instance constructor ("__init__") to simply
-  accept the path to an existing data folder and load the data.
+  the required data. This lets the instance constructor ("__init__") accept the
+  path to an existing data folder and load the data.
 
   This mechanism is key to Snapshot atomicity: because there can exist multiple
   live instances of a single snapshot (e.g. one is still being trained while
