@@ -108,7 +108,6 @@ class PytorchTrainable():
       self.epoch(data)
     # TODO: summary book-keeping
     # TODO: save the model file
-    self.snapshot.serialize()
 
 
 class PytorchTask(PytorchTrainable, BaseTask):

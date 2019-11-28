@@ -101,3 +101,46 @@ class Snapshot():
       os.remove(item.path)
     # Reserialize
     self.serialize()
+
+  def train_storage(self):
+    """Get a handle to train_data that writes there safely."""
+    return SnapshotView(self, self.train_data)
+
+  def test_storage(self):
+    """Get a handle to test_data that writes there safely."""
+    return SnapshotView(self, self.test_data)
+
+  def custom_storage(self):
+    """Get a handle to custom_data that writes there safely."""
+    return SnapshotView(self, self.custom_data)
+
+
+class SnapshotView():
+  """Context manager that allows atomic writes to the Snapshot."""
+  def __init__(self, parent:Snapshot, target:str):
+    self.parent = parent
+    self.data = target
+    self.ready = False
+
+  def store(self, name, value):
+    """Append a single data value to the list under a given name."""
+    # ...but only when the context has been entered (and locks acquired etc.)
+    if not self.ready:
+      raise RuntimeError("SnapshotView is a context manager. Never use it directly!")
+    # If this is the first entry under this key - create it
+    try:
+      target = self.data[name]
+    except KeyError:
+      target = []
+      self.data[name] = target
+    target.append(value)
+
+  def __enter__(self):
+    # Currently does nothing, but later will do locks&reads for atomic writes
+    self.ready = True
+    return self
+
+  def __exit__(self, *args, **kwargs):
+    # Ensure the Snapshot serializes, later will also release locks
+    self.parent.serialize()
+    self.ready = False
