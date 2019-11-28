@@ -1,7 +1,5 @@
 import os
 
-import torch
-
 from .logging import Logger
 from .task import BaseTask
 
@@ -71,7 +69,7 @@ class PytorchTrainable():
     loss.backward()
     return loss
 
-  def step(self, sample):
+  def iteration(self, sample):
     """Default meta-algorithm for a single iteration over the training dataset."""
     self.model.train()
     self.optimizer.zero_grad()
@@ -91,7 +89,7 @@ class PytorchTrainable():
     """
     logger = Logger('average')
     for self.iter_i, sample in enumerate(dataset):
-      self.step(sample)
+      self.iteration(sample)
       losses = self.parse_losses(self.loss)
       logger.log(losses)
     logger.store_train(self.snapshot)

@@ -1,9 +1,9 @@
-import datetime
 import importlib
 import json
 import os
 import random
 import sys
+import time
 
 import git
 
@@ -29,6 +29,7 @@ class Experiment():
   """
 
   GIT_EXCLUDE = ['.git', '__pycache__']
+  DEFAULT_MSG = '(no comment)'
 
   @classmethod
   def new(self, path):
@@ -191,6 +192,9 @@ class Experiment():
 
     # Commit code
     if self.changed_files or self.removed_files:
+      # make sure there exists some string for a commit message
+      if not message:
+        message = self.DEFAULT_MSG
       # add to staging area
       if self.changed_files:
         self.local_repo.index.add(self.changed_files)
@@ -216,17 +220,15 @@ class Experiment():
       # said reference under "commit"
     # get its SHA
     hexsha = commit.hexsha
-    # generate the timestamp from the commit datetime
-    commit_time = commit.committed_datetime
-    time_offset = commit_time.utcoffset()
-    local_time = commit_time - time_offset
+    # generate the timestamp
+    local_time = time.localtime()
     timestamp = '{}{:0>2}{:0>2}-{:0>2}{:0>2}{:0>2}'.format(
-      local_time.year,
-      local_time.month,
-      local_time.day,
-      local_time.hour,
-      local_time.minute,
-      local_time.second
+      local_time.tm_year,
+      local_time.tm_mon,
+      local_time.tm_mday,
+      local_time.tm_hour,
+      local_time.tm_min,
+      local_time.tm_sec
     )
     # create the locating subfolder for the snapshot
     snapshot_name = '{}-{}'.format(timestamp, uid)
