@@ -56,8 +56,12 @@ class Snapshot():
     self.timestamp = None
     self.filename = None
     self.comment = None
-    # Mutable data entries (TODO)
-    # Load everything from the data  file
+    # Mutable data entries
+    self.train_data = {}  # anything produced during training, epoch by epoch
+    self.test_data = {}   # results of a test
+    self.param_files = [] # saved model parameters
+    self.custom_data = {} # whatever the user might like to save
+    # Load everything from the data file
     if not self._create_flag:
       self.deserialize()
 
@@ -75,7 +79,11 @@ class Snapshot():
       'commit_sha',
       'timestamp',
       'filename',
-      'comment'
+      'comment',
+      'train_data',
+      'test_data',
+      'param_files',
+      'custom_data',
     ]
     data = {key: self.__dict__[key] for key in keys}
     with open(os.path.join(self.root_path, self._data_file), 'w') as file:
@@ -83,3 +91,13 @@ class Snapshot():
 
   def reset(self):
     """Remove all data, reverting the snapshot to the zero state."""
+    # Clear mutable data, but leave the immutables intact
+    self.train_data = {}
+    self.test_data = {}
+    self.param_files = {}
+    self.custom_data = {}
+    # Remove all the physical assets
+    for item in os.scandir(self.root_path):
+      os.remove(item.path)
+    # Reserialize
+    self.serialize()

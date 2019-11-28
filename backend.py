@@ -2,6 +2,7 @@ import os
 
 import torch
 
+from .logging import Logger
 from .task import BaseTask
 
 class PytorchTrainable():
@@ -78,14 +79,24 @@ class PytorchTrainable():
     self.output = self.forward_train(self.sample)
     self.loss = self.backward(self.output, self.sample)
     self.optimizer.step()
-    # TODO: iteration-level book-keeping
+
+  def parse_losses(self, loss):
+    """Unpack whatever came out of the backward pass for automatic logging."""
+    return {'loss': loss.item()}
 
   def epoch(self, dataset):
-    """Default meaning of an 'epoch' (single iteration over the dataset)."""
-    for sample in dataset:
+    """Default meaning of an 'epoch' (single iteration over the dataset).
+
+    Additionally does some basic book-keeping using Logger.
+    """
+    logger = Logger('average')
+    for self.iter_i, sample in enumerate(dataset):
       self.step(sample)
-    # TODO: epoch-level book-keeping
+      losses = self.parse_losses(self.loss)
+      logger.log(losses)
+    logger.store_train(self.snapshot)
     # TODO: validation pass
+    # TODO: every_n_epochs/n_iters helper functions
 
   def train(self):
     """Default training meta-algorithm."""
@@ -99,6 +110,7 @@ class PytorchTrainable():
       self.epoch(data)
     # TODO: summary book-keeping
     # TODO: save the model file
+    self.snapshot.serialize()
 
 
 class PytorchTask(PytorchTrainable, BaseTask):
@@ -130,6 +142,7 @@ class PytorchTask(PytorchTrainable, BaseTask):
     self.optimizer = None
     self.dataset = None
     self.epoch_i = None
+    self.iter_i = None
     self.sample = None
     self.output = None
     self.loss = None
