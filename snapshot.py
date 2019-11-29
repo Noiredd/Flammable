@@ -144,3 +144,36 @@ class SnapshotView():
     # Ensure the Snapshot serializes, later will also release locks
     self.parent.serialize()
     self.ready = False
+
+
+class DummySnapshot(Snapshot):
+  """Ad-hoc Snapshot that is neither bound to a commit nor a folder.
+
+  It does not serialize, it does not create nor delete anything in its folder.
+  It only collects metrics like normal, allowing the user to extract and use
+  them.
+
+  This comes very handy when using a Task directly: without main(), or when
+  importing it without library. If the API that connects the instance with the
+  experiment (and thus the global repository and assets folder) is missing, a
+  normal Snapshot instance is not created, and thus backend, via a Logger
+  instance, would not be able to store anything.
+  In the case of an external import (if main is still called), a Dummy instance
+  is automatically created, allowing data to be collected.
+  """
+  def __init__(self):
+    super(DummySnapshot, self).__init__(None)
+
+  # Explicitly disable serialization
+  def serialize(self):
+    pass
+
+  def deserialize(self):
+    pass
+
+  # The original reset deletes data
+  def reset(self):
+    self.train_data = {}
+    self.test_data = {}
+    self.param_files = {}
+    self.custom_data = {}

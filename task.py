@@ -1,8 +1,9 @@
 import argparse
 import os
 
-from .library import library
 from .identify import get_caller, is_imported
+from .library import library
+from .snapshot import DummySnapshot
 
 class BaseTask():
   """Base class for running and archiving any machine learning model.
@@ -65,6 +66,8 @@ class BaseTask():
     if is_imported():
       if self.is_library_import():
         self.api_main()
+      else:
+        self.enable_dummy_snapshot()
     else:
       # otherwise assume being run from the command line
       return self.cli_main(message=message)
@@ -170,6 +173,14 @@ class BaseTask():
   def api_main(self):
     """Export the instance for external use through the library."""
     self.register_instance(self)
+
+  def enable_dummy_snapshot(self):
+    """Spawn a DummySnapshot, without the need for commits or folders.
+
+    Useful when git functionality is not needed, but training/testing results
+    are still to be captured somewhere.
+    """
+    self.snapshot = DummySnapshot()
 
   # API import mechanics
 
