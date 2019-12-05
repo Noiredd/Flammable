@@ -6,7 +6,7 @@ class Snapshot():
 
   Each Snapshot corresponds to a specific point in the code history (commit).
   Each Snapshot stores at most a single trained version of an experiment (but
-  multiple intermediate parameter files).
+  multiple intermediate model files).
 
   Each Snapshot lives in its own folder ("root_path"), which is however created
   (and, possibly, destroyed) by its parent - an Experiment.
@@ -59,11 +59,18 @@ class Snapshot():
     # Mutable data entries
     self.train_data = {}  # anything produced during training, epoch by epoch
     self.test_data = {}   # results of a test
-    self.param_files = [] # saved model parameters
+    self.model_files = [] # saved model parameters
     self.custom_data = {} # whatever the user might like to save
     # Load everything from the data file
     if not self._create_flag:
       self.deserialize()
+
+  def make_path(self, filename):
+    """Prepend a given filename with the absolute path to the Snapshot folder.
+
+    Useful to control saving location of any assets produced by the model.
+    """
+    return os.path.join(self.root_path, filename)
 
   def deserialize(self):
     """Load from the associated data file, overwriting the current state."""
@@ -82,7 +89,7 @@ class Snapshot():
       'comment',
       'train_data',
       'test_data',
-      'param_files',
+      'model_files',
       'custom_data',
     ]
     data = {key: self.__dict__[key] for key in keys}
@@ -94,7 +101,7 @@ class Snapshot():
     # Clear mutable data, but leave the immutables intact
     self.train_data = {}
     self.test_data = {}
-    self.param_files = {}
+    self.model_files = []
     self.custom_data = {}
     # Remove all the physical assets
     for item in os.scandir(self.root_path):
@@ -113,6 +120,20 @@ class Snapshot():
   def custom_storage(self):
     """Get a handle to custom_data that writes there safely."""
     return SnapshotView(self, self.custom_data)
+
+  def register_model_file(self, filename):
+    """Add a given model file to the internal registry."""
+    # TODO: remember about locking&reading when doing the atomic stuff
+    self.model_files.append(filename)
+    self.serialize()
+
+  def fetch_last_model_file(self):
+    """Return the full path to the last saved model file."""
+    try:
+      filename = self.model_files[-1]
+      return self.make_path(filename)
+    except IndexError:
+      return None
 
 
 class SnapshotView():
@@ -162,7 +183,7 @@ class DummySnapshot(Snapshot):
   is automatically created, allowing data to be collected.
   """
   def __init__(self):
-    super(DummySnapshot, self).__init__(None)
+    super(DummySnapshot, self).__init__('.')
 
   # Explicitly disable serialization
   def serialize(self):
@@ -175,5 +196,5 @@ class DummySnapshot(Snapshot):
   def reset(self):
     self.train_data = {}
     self.test_data = {}
-    self.param_files = {}
+    self.model_files = []
     self.custom_data = {}

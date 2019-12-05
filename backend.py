@@ -1,5 +1,7 @@
 import os
 
+import torch
+
 from .logging import Logger
 from .task import BaseTask
 
@@ -107,7 +109,7 @@ class PytorchTrainable():
     for self.epoch_i in range(self.epochs):
       self.epoch(data)
     # TODO: summary book-keeping
-    # TODO: save the model file
+    self.save_model('final.pt')
 
 
 class PytorchTask(PytorchTrainable, BaseTask):
@@ -153,4 +155,32 @@ class PytorchTask(PytorchTrainable, BaseTask):
     """Default forward pass through the model."""
     return self.model(data)
 
-  # TODO: save/read model files (and register them with Snapshot)
+  # General utilities
+
+  def save_model(self, filename):
+    """Save the current state of the model under a given file.
+
+    This is not just a convenience wrapper around the usual torch.save(). Most
+    importantly, it registers this model file in the Snapshot's storage, which
+    allows loading it by name later (and causes the physical file to be located
+    in the corresponding Snapshot's folder).
+    """
+    path = self.snapshot.make_path(filename)
+    with open(path, 'wb') as file:
+      torch.save(self.model.state_dict(), file)
+    self.snapshot.register_model_file(filename)
+
+  def load_model(self, filename=None):
+    """Load the model state from a given file, or load the last available one."""
+    if filename:
+      path = self.snapshot.make_path(filename)
+      if os.path.isfile(path):
+        self.model.load_state_dict(torch.load(path))
+      else:
+        raise RuntimeError("There is no such model file in the Snapshot folder!")
+    else:
+      path = self.snapshot.fetch_last_model_file()
+      if path:
+        self.model.load_state_dict(torch.load(path))
+      else:
+        raise RuntimeError("This Snapshot has no saved model files!")
