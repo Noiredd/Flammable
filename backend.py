@@ -16,8 +16,8 @@ class PytorchTrainable():
       * iterate over the data source, each time doing the following:
         * prepare the data sample
         * perform the forward pass for this sample, obtaining some output
-        * perform the backward pass for this output and the original sample,
-          obtaining some loss metric, and back-propagate it
+        * compute the loss value for this output and the original sample
+        * perform the backward pass
         * update the model parameters
   Might be best to read it from the bottom, as the most low-level functions are
   higher up, and the most abstract algorithm is below.
@@ -65,24 +65,37 @@ class PytorchTrainable():
     return output
 
   def backward(self, output, sample):
-    """Default backward pass."""
+    """Default backward pass.
+
+    Evaluates a given criterion, backpropagates, and returns a nicely formatted
+    dict with the loss values, which can be directly fed to the Logger. If the
+    user deals with multiple losses or labels, they only need to override this
+    one function to dictate how the losses are supposed to be evaluated and
+    what do they mean.
+    """
     _, label = sample
+    # Evaluate the criterion
     loss = self.criterion(output, label)
+    # Backpropagate
     loss.backward()
-    return loss
+    # Name the losses for logging
+    loss_values = {
+      'loss': loss.item(),
+    }
+    return loss_values
 
   def iteration(self, sample):
-    """Default meta-algorithm for a single iteration over the training dataset."""
+    """Default meta-algorithm for a single iteration over the training dataset.
+
+    Returns post-processed loss(es), ready to log.
+    """
     self.model.train()
     self.optimizer.zero_grad()
     self.sample = self.prepare_train(sample)
     self.output = self.forward_train(self.sample)
-    self.loss = self.backward(self.output, self.sample)
+    loss = self.backward(self.output, self.sample)
     self.optimizer.step()
-
-  def parse_losses(self, loss):
-    """Unpack whatever came out of the backward pass for automatic logging."""
-    return {'loss': loss.item()}
+    return loss
 
   def epoch(self, dataset):
     """Default meaning of an 'epoch' (single iteration over the dataset).
@@ -91,8 +104,7 @@ class PytorchTrainable():
     """
     logger = Logger('average')
     for self.iter_i, sample in enumerate(dataset):
-      self.iteration(sample)
-      losses = self.parse_losses(self.loss)
+      losses = self.iteration(sample)
       logger.log(losses)
     logger.store_train(self.snapshot)
     # TODO: validation pass
@@ -144,7 +156,6 @@ class PytorchTask(PytorchTrainable, BaseTask):
     self.iter_i = None
     self.sample = None
     self.output = None
-    self.loss = None
     # Hyperparameters
     self.device = None
     self.epochs = None
