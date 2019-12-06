@@ -124,7 +124,113 @@ class PytorchTrainable():
     self.save_model('final.pt')
 
 
-class PytorchTask(PytorchTrainable, BaseTask):
+class PytorchTestable():
+  """Mixin for testing-related abstractions.
+
+  Realizes the most high-level idea of a test, defined as follows:
+    * create the data source
+    * create the test metric
+    * iterate over the data source, each time doing the following:
+      * prepare the data sample
+      * perform the forward pass for this sample, obtaining some output
+      * compute the metric value and store it
+    * perform some post-processing to produce a final metric
+
+  An additional layer of abstraction is introduced to separate the test logic
+  from utility activities such as instantiation of the dataset or loading the
+  model (weights). The main "test" function does all these, but the test logic
+  itself is encapsulated in a specialized "test_on" method, which does nothing
+  else. This gives the user a straightforward way to test an imported instance
+  on whatever dataset they wish, from whichever model file they wish.
+
+  When deriving from PytorchTestable (or rather PytorchTask) one still needs to
+  implement some of the functions - see "User code" area.
+
+  Warning: due to dependencies on several self-bound attributes and methods
+  (e.g. self.forward() or self.device) this class alone makes little sense. It
+  shall be used only when mixed into the PytorchTask composite class.
+  """
+
+  # User code
+
+  def get_testing_data(self):
+    """User code: should return a testing data loader.
+
+    Similar default expectations apply as in the case of Trainable.
+    """
+    raise NotImplementedError
+
+  def get_metric(self):
+    """User code: should return a callable to measure some test metric."""
+    raise NotImplementedError
+
+  # Meta-algorithm
+
+  def prepare_test(self, sample):
+    """Default sample preprocessing before feeding to the model at testing."""
+    data, label = sample
+    data = data.to(self.device)
+    label = label.to(self.device)
+    return data, label
+
+  def forward_test(self, sample):
+    """Default forward pass during training."""
+    data, _ = sample
+    output = self.forward(data)
+    return output
+
+  def eval_metrics(self, output, sample):
+    """Evaluate criterion/criteria and return log-ready values.
+
+    Corresponds to PytorchTrainable's "backward". Similarly, this allows
+    evaluating complex test metrics (e.g. consisting of multiple different
+    callables, or referring to multiple ground truth labels). For example:
+      _, label = sample
+      L2, accuracy, F1 = self.metric
+      metrics = {
+        'L2_loss': L2(output, label).item(),
+        'accuracy': accuracy(output, label).item(),
+        'F1_score': F1(output, label).item(),
+      }
+      return metrics
+    """
+    _, label = sample
+    metrics = {
+      'loss': self.metric(output, label).item()
+    }
+    return metrics
+
+  def test_on(self, dataset, snapshot=None):
+    """Default testing meta-algorithm.
+
+    Iterates over the given dataset and logs metrics' values using a Logger. If
+    "snapshot" is given, will automatically postprocess and store these values
+    in that snapshot. Otherwise will return the list of raw results.
+    """
+    logger = Logger()
+    self.model.eval()
+    for sample in dataset:
+      sample = self.prepare_test(sample)
+      output = self.forward_test(sample)
+      metrics = self.eval_metrics(output, sample)
+      logger.log(metrics)
+    if snapshot:
+      logger.store_test(snapshot)
+    else:
+      return logger.values
+
+  def test(self):
+    """Master algorithm for testing, as executed by the CLI."""
+    self.load_model()
+    self.model.to(self.device)
+    # Initialize required components (user-defined)
+    data = self.get_testing_data()
+    self.metric = self.get_metric()
+    # Run the test logic (automatically stores results)
+    self.test_on(data, self.snapshot)
+
+
+class PytorchTask(PytorchTestable, PytorchTrainable, BaseTask):
   """Basic, abstract skeleton of a PyTorch-based ML model.
 
   Following the basic assumption, there are 3 "states" that a model can be in.

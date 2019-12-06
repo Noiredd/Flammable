@@ -36,5 +36,18 @@ class Logger():
     """Postprocess and dump current values into a given Snapshot's train_data."""
     with snapshot.train_storage() as transaction:
       for key, val in self.values.items():
+        transaction.append(key, self.postprocess(val))
+
+  def store_test(self, snapshot, store_raw=True):
+    """Postprocess and dump current values into a given Snapshot's test_data.
+
+    If a postprocessing function has been chosen and "store_raw" is True, the
+    original values for each entry will also be stored in the Snapshot, under
+    the same key but suffixed with "_data".
+    """
+    with snapshot.test_storage() as transaction:
+      for key, val in self.values.items():
         transaction.store(key, self.postprocess(val))
+        if self.has_post_fun and store_raw:
+          transaction.store(key + "_data", val)
 
