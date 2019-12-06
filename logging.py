@@ -5,6 +5,10 @@ class Logger():
   named. Each sample will be appended to a list stored internally under that
   name. Finally, data can be pushed to some Snapshot, with some optional post-
   processing (currently available: only averaging or none).
+
+  "mode" can be either a string identifying one of built-in postprocessing
+  functions, or a callable to be used instead.
+  Currently supported built-ins: "all", "average".
   """
   post_funs = {
     'all': lambda x: x,
@@ -13,7 +17,13 @@ class Logger():
 
   def __init__(self, mode='average'):
     self.values = {}
-    self.postprocess = self.post_funs[mode]
+    self.has_post_fun = (mode != 'all')
+    if mode in self.post_funs.keys():
+      self.postprocess = self.post_funs[mode]
+    elif callable(mode):
+      self.postprocess = mode
+    else:
+      raise KeyError("Unknown postprocessing function!")
 
   def log(self, losses:dict):
     """Append each named sample to a corresponding list in the internal dict."""
