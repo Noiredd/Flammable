@@ -138,12 +138,20 @@ class Snapshot():
 
 class SnapshotView():
   """Context manager that allows atomic writes to the Snapshot."""
-  def __init__(self, parent:Snapshot, target:str):
+  def __init__(self, parent:Snapshot, target:dict):
     self.parent = parent
     self.data = target
     self.ready = False
 
   def store(self, name, value):
+    """Store a value directly under the given name."""
+    # ...but only when the context has been entered (and locks acquired etc.)
+    if not self.ready:
+      raise RuntimeError("SnapshotView is a context manager. Never use it directly!")
+    # Do not ask for permission - overwrite the old entry if necessary
+    self.data[name] = value
+
+  def append(self, name, value):
     """Append a single data value to the list under a given name."""
     # ...but only when the context has been entered (and locks acquired etc.)
     if not self.ready:
