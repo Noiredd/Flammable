@@ -2,7 +2,7 @@ import os
 
 import torch
 
-from .logging import Logger
+from .logger import Logger
 from .task import BaseTask
 
 class PytorchTrainable():
