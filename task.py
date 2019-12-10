@@ -122,7 +122,7 @@ class BaseTask():
   def cli_parse(self):
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(prog='MAGEM')
-    parser.add_argument('command', choices=['train']) # XXX just for now
+    parser.add_argument('command', choices=['train', 'test'])
     parser.add_argument('--retrain', action='store_true', help="[Training\
       only] Reset the existing snapshot and train it from scratch.")
     parser.add_argument('--force', action='store_true', help="[Training only]\
@@ -171,7 +171,31 @@ class BaseTask():
       return
 
   def cli_test(self, args):
-    """Testing command logic."""
+    """Testing command logic.
+
+    As with the "cli_train", logic is bound with the current state of the repo.
+    Usually, a model is first trained and later tested - code is not expected
+    to change between the two operations. Of course, it may happen that after
+    calling "train" on a model, some modifications have been made. Or even that
+    another Snapshot has been created and trained. But since in such situations
+    it is amgibuous which version should be brought to test, the recommended
+    usage is to import the specific Snapshot to test via API. When using the
+    CLI, it is assumed that the code hasn't changed between train and test. So:
+      * if there were no changes in the code: get the last Snapshot, run "test",
+      * if there were changes but --ignore was given: get the last Snapshot, run
+        "test".
+    """
+    # Check for changes in the repository
+    is_changed = self.experiment.check_changes()
+    if not is_changed or args.ignore:
+      # Test the last Snapshot
+      self.snapshot = self.experiment.get_last_snapshot()
+      self.test()
+    else:
+      print("Changes detected. Which snapshot do you wish to test?",
+            "If you wish to test the last snapshot, run with --ignore.",
+            "If you wish to test some other snapshot, use the python API to " +
+            "select and import it, and call its test() method.")
 
   def api_main(self):
     """Export the instance for external use through the library."""
