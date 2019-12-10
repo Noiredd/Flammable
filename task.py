@@ -33,8 +33,11 @@ class BaseTask():
   _imported_object = None
 
   def __init__(self):
+    # By default, start with no link to the owner, but already have a fake
+    # snapshot instance, just in case of direct (non-CLI) usage. If needed,
+    # this will be replaced with a full Snapshot later.
     self.experiment = None
-    self.snapshot = None
+    self.snapshot = DummySnapshot()
 
   # All backends have to implement these
 
@@ -173,14 +176,6 @@ class BaseTask():
   def api_main(self):
     """Export the instance for external use through the library."""
     self.register_instance(self)
-
-  def enable_dummy_snapshot(self):
-    """Spawn a DummySnapshot, without the need for commits or folders.
-
-    Useful when git functionality is not needed, but training/testing results
-    are still to be captured somewhere.
-    """
-    self.snapshot = DummySnapshot()
 
   # API import mechanics
 
