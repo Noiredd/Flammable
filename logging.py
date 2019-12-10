@@ -51,3 +51,9 @@ class Logger():
         if self.has_post_fun and store_raw:
           transaction.store(key + "_data", val)
 
+  def return_final(self):
+    """Simply postprocess all the value lists and return them without storing."""
+    results = {
+      key: self.postprocess(val) for key, val in self.values.items()
+    }
+    return results
