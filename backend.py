@@ -106,7 +106,7 @@ class PytorchTrainable():
     for self.iter_i, sample in enumerate(dataset):
       losses = self.iteration(sample)
       logger.log(losses)
-    logger.store_train(self.snapshot)
+    logger.store_train(self.snapshot, epoch_i=self.epoch_i)
 
   def train(self):
     """Default training meta-algorithm."""
@@ -291,6 +291,7 @@ class PytorchTestable():
     with self.snapshot.val_storage() as transaction:
       for name, value in metrics.items():
         transaction.append(name, value)
+      transaction.append('epoch_i', self.epoch_i)
 
   def validate(self, *args):
     """Perform a testing round while training.

@@ -32,24 +32,37 @@ class Logger():
         self.values[name] = []
       self.values[name].append(value)
 
-  def store_train(self, snapshot):
-    """Postprocess and dump current values into a given Snapshot's train_data."""
+  def store_train(self, snapshot, **custom):
+    """Postprocess and dump current values into a given Snapshot's train_data.
+
+    Allows appending additional, custom data fields using the kwarg dict. Does
+    not apply any postprocessing to these though.
+    """
     with snapshot.train_storage() as transaction:
       for key, val in self.values.items():
         transaction.append(key, self.postprocess(val))
+      if custom:
+        for key, val in custom.items():
+          transaction.append(key, val)
 
-  def store_test(self, snapshot, store_raw=True):
+  def store_test(self, snapshot, store_raw=True, **custom):
     """Postprocess and dump current values into a given Snapshot's test_data.
 
     If a postprocessing function has been chosen and "store_raw" is True, the
     original values for each entry will also be stored in the Snapshot, under
     the same key but suffixed with "_data".
+
+    Allows storing additional, custom data fields using the kwarg dict. Does
+    not apply any postprocessing to them, regardless of "store_raw" setting.
     """
     with snapshot.test_storage() as transaction:
       for key, val in self.values.items():
         transaction.store(key, self.postprocess(val))
         if self.has_post_fun and store_raw:
           transaction.store(key + "_data", val)
+      if custom:
+        for key, val in custom.items():
+          transaction.store(key, val)
 
   def return_final(self):
     """Simply postprocess all the value lists and return them without storing."""
