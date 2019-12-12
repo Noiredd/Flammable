@@ -58,6 +58,7 @@ class Snapshot():
     self.comment = None
     # Mutable data entries
     self.train_data = {}  # anything produced during training, epoch by epoch
+    self.val_data = {}    # results of intermediate tests during training
     self.test_data = {}   # results of a test
     self.model_files = [] # saved model parameters
     self.custom_data = {} # whatever the user might like to save
@@ -88,6 +89,7 @@ class Snapshot():
       'filename',
       'comment',
       'train_data',
+      'val_data',
       'test_data',
       'model_files',
       'custom_data',
@@ -100,6 +102,7 @@ class Snapshot():
     """Remove all data, reverting the snapshot to the zero state."""
     # Clear mutable data, but leave the immutables intact
     self.train_data = {}
+    self.val_data = {}
     self.test_data = {}
     self.model_files = []
     self.custom_data = {}
@@ -112,6 +115,10 @@ class Snapshot():
   def train_storage(self):
     """Get a handle to train_data that writes there safely."""
     return SnapshotView(self, self.train_data)
+
+  def val_storage(self):
+    """Get a handle to val_data that writes there safely."""
+    return SnapshotView(self, self.val_data)
 
   def test_storage(self):
     """Get a handle to test_data that writes there safely."""
@@ -203,6 +210,7 @@ class DummySnapshot(Snapshot):
   # The original reset deletes data
   def reset(self):
     self.train_data = {}
+    self.val_data = {}
     self.test_data = {}
     self.model_files = []
     self.custom_data = {}

@@ -91,9 +91,9 @@ class PytorchTrainable():
     """
     self.model.train()
     self.optimizer.zero_grad()
-    self.sample = self.prepare_train(sample)
-    self.output = self.forward_train(self.sample)
-    loss = self.backward(self.output, self.sample)
+    sample = self.prepare_train(sample)
+    output = self.forward_train(sample)
+    loss = self.backward(output, sample)
     self.optimizer.step()
     return loss
 
@@ -107,8 +107,6 @@ class PytorchTrainable():
       losses = self.iteration(sample)
       logger.log(losses)
     logger.store_train(self.snapshot)
-    # TODO: validation pass
-    # TODO: every_n_epochs/n_iters helper functions
 
   def train(self):
     """Default training meta-algorithm."""
@@ -120,8 +118,37 @@ class PytorchTrainable():
     # Run the outer loop
     for self.epoch_i in range(self.epochs):
       self.epoch(data)
-    # TODO: summary book-keeping
+    # Store the final model
     self.save_model('final.pt')
+
+  # Utilities
+
+  def every_n_epochs(self, n, function, skip_zero=True):
+    """Execute "function" but only every "n" epochs.
+
+    "function" must accept a single argument, which will be a reference to the
+    self instance.
+
+    Call this function at every epoch - it will care of everything.
+    "skip_zero" will make it ignore the first call (since it uses modulo to
+    check whether it's time to make the function call, it would call after the
+    first epoch, which may or may not be intended).
+
+    Example usage:
+
+      def infer_reference(task):
+        # ...
+
+      class MyTask(PytorchTask):
+        #...
+        def epoch(self, dataset):
+          super(MyTask, self).epoch(dataset)
+          self.every_n_epochs(10, infer_reference)
+    """
+    if skip_zero and self.epoch_i == 0:
+      return
+    if self.epoch_i % n == 0:
+      function(self)
 
 
 class PytorchTestable():
@@ -142,6 +169,13 @@ class PytorchTestable():
   itself is encapsulated in a specialized "test_on" method, which does nothing
   else. This gives the user a straightforward way to test an imported instance
   on whatever dataset they wish, from whichever model file they wish.
+
+  Testable also provides an additional interface to simplify validating a model
+  during training. The algorithm is roughly:
+    * create the data source or use a cached one
+    * call test_on(this data source)
+    * store results in the snapshot
+  and is available to the user as "validate" method.
 
   When deriving from PytorchTestable (or rather PytorchTask) one still needs to
   implement some of the functions - see "User code" area.
@@ -179,7 +213,7 @@ class PytorchTestable():
     output = self.forward(data)
     return output
 
-  def eval_metrics(self, output, sample):
+  def evaluate_metrics(self, output, sample):
     """Evaluate criterion/criteria and return log-ready values.
 
     Corresponds to PytorchTrainable's "backward". Similarly, this allows
@@ -200,6 +234,14 @@ class PytorchTestable():
     }
     return metrics
 
+  def single_test(self, sample):
+    """A single test iteration, returning formatted metric(s)."""
+    sample = self.prepare_test(sample)
+    with torch.no_grad():
+      output = self.forward_test(sample)
+      metrics = self.evaluate_metrics(output, sample)
+    return metrics
+
   def test_on(self, dataset, snapshot=None):
     """Default testing meta-algorithm.
 
@@ -209,25 +251,60 @@ class PytorchTestable():
     """
     logger = Logger()
     self.model.eval()
+    # Initialize the metric callable now, so the user doesn't have to
+    self.metric = self.get_metric()
+    # Testing meta-algorithm (loop)
     for sample in dataset:
-      sample = self.prepare_test(sample)
-      output = self.forward_test(sample)
-      metrics = self.eval_metrics(output, sample)
+      metrics = self.single_test(sample)
       logger.log(metrics)
+    # Book-keeping
     if snapshot:
       logger.store_test(snapshot)
     else:
-      return logger.values
+      return logger.return_final()
 
   def test(self):
     """Master algorithm for testing, as executed by the CLI."""
     self.load_model()
     self.model.to(self.device)
-    # Initialize required components (user-defined)
+    # Spawn data now, but the metric callable later
     data = self.get_testing_data()
-    self.metric = self.get_metric()
     # Run the test logic (automatically stores results)
     self.test_on(data, self.snapshot)
+
+  # Validation interface
+
+  def get_validation_data(self):
+    """User code: should return a validation data object.
+
+    By default does the same thing as "get_testing_data", but can be overridden
+    when needed. Returned object should behave the same as test data in all
+    cases.
+    """
+    return self.get_testing_data()
+
+  def log_validation(self, metrics):
+    """Store computed validation metrics in a snapshot.
+
+    Expects "metrics" to follow the layout defined in "evaluate_metrics".
+    """
+    with self.snapshot.val_storage() as transaction:
+      for name, value in metrics.items():
+        transaction.append(name, value)
+
+  def validate(self, *args):
+    """Perform a testing round while training.
+
+    Accepts additional arguments to make calls from PytorchTrainable's
+    "every_n_epochs" (which passes self as argument).
+    """
+    # Get validation data (or use cached object)
+    if self.val_dataset is None:
+      self.val_dataset = self.get_validation_data()
+    # Execute the test
+    metrics = self.test_on(self.val_dataset)
+    # Store the results
+    self.log_validation(metrics)
 
 
 class PytorchTask(PytorchTestable, PytorchTrainable, BaseTask):
@@ -258,10 +335,9 @@ class PytorchTask(PytorchTestable, PytorchTrainable, BaseTask):
     self.criterion = None
     self.optimizer = None
     self.dataset = None
+    self.val_dataset = None
     self.epoch_i = None
     self.iter_i = None
-    self.sample = None
-    self.output = None
     # Hyperparameters
     self.device = None
     self.epochs = None
