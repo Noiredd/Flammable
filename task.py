@@ -47,7 +47,7 @@ class BaseTask():
   def test(self):
     raise NotImplementedError
 
-  def eval(self, input):
+  def eval_path(self, input_path, output_path):
     raise NotImplementedError
 
   def server(self):
@@ -69,8 +69,6 @@ class BaseTask():
     if is_imported():
       if self.is_library_import():
         self.api_main()
-      else:
-        self.enable_dummy_snapshot()
     else:
       # otherwise assume being run from the command line
       return self.cli_main(message=message)
@@ -115,14 +113,19 @@ class BaseTask():
     elif args.command == 'test':
       return self.cli_test(args=args)
     elif args.command == 'eval':
-      raise NotImplementedError("This is not ready yet, TODO!")
+      return self.cli_eval(args=args)
     elif args.command == 'server':
       raise NotImplementedError("This is not ready yet, TODO!")
 
   def cli_parse(self):
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(prog='MAGEM')
-    parser.add_argument('command', choices=['train', 'test'])
+    parser.add_argument('command', choices=['train', 'test', 'eval'])
+    parser.add_argument('infile', nargs='?', help="[Evaluation only]\
+      Path to the input file.")
+    parser.add_argument('outfile', nargs='?', help="[Evaluation only]\
+      Path to the output file.")
+    parser.add_argument('other', nargs='*')
     parser.add_argument('--retrain', action='store_true', help="[Training\
       only] Reset the existing snapshot and train it from scratch.")
     parser.add_argument('--force', action='store_true', help="[Training only]\
@@ -196,6 +199,24 @@ class BaseTask():
             "If you wish to test the last snapshot, run with --ignore.",
             "If you wish to test some other snapshot, use the python API to " +
             "select and import it, and call its test() method.")
+
+  def cli_eval(self, args):
+    """Evaluation command logic.
+
+    Logic is bound with the repo state in exactly the same way as in "cli_test".
+    """
+    # Check for changes in the repository
+    is_changed = self.experiment.check_changes()
+    if not is_changed or args.ignore:
+      # Load the last Snapshot
+      self.snapshot = self.experiment.get_last_snapshot()
+      # Evaluate the model on given arguments
+      self.eval_path(input_path=args.infile, output_path=args.outfile)
+    else:
+      print("Changes detected. Which snapshot do you wish to evaluate?",
+            "If you wish to eval the last snapshot, run with --ignore.",
+            "If you wish to eval some other snapshot, use the python API to " +
+            "select and import it, and call its eval() or eval_path() method.")
 
   def api_main(self):
     """Export the instance for external use through the library."""
