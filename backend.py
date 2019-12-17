@@ -208,7 +208,7 @@ class PytorchTestable():
     return data, label
 
   def forward_test(self, sample):
-    """Default forward pass during training."""
+    """Default forward pass during testing."""
     data, _ = sample
     output = self.forward(data)
     return output
@@ -308,7 +308,84 @@ class PytorchTestable():
     self.log_validation(metrics)
 
 
-class PytorchTask(PytorchTestable, PytorchTrainable, BaseTask):
+class PytorchEvaluable():
+  """Mixin for evaluation-related abstractions.
+
+  Realizes the most high-level idea of an evaluation, understood as "processing
+  a single input and producing some result". The intended usage is to treat the
+  input as a path to some data sample and load actual data from there, and then
+  store the result under some other path. Therefore the proposed meta-algorithm
+  is as follows:
+  * load sample from the given path
+  * prepare the sample
+  * forward through the model
+  * post-process the output
+  * store the result under the given path.
+
+  An additional layer of abstraction is introduced around data preparation/pro-
+  cessing/post-processing, to separate these functions from load/store actions.
+  This gives the advantage of being able to use evaluation "live" - on already
+  loaded instances - e.g. in other scripts, or as an inference server. Function
+  "eval_path" is a complete interface, including loading input data and storing
+  the outputs, while "eval" only performs evaluation.
+
+  When deriving from PytorchEvaluable (or rather PytorchTask) one still needs
+  to implement some of the functions - see "User code" area.
+
+  Warning: due to dependencies on several self-bound attributes and methods
+  (e.g. self.forward() or self.device) this class alone makes little sense. It
+  shall be used only when mixed into the PytorchTask composite class.
+  """
+
+  # User code
+
+  def load_sample(self, path):
+    raise NotImplementedError
+
+  def store_result(self, result, path):
+    raise NotImplementedError
+
+  # Meta-algorithm
+
+  def prepare_eval(self, data):
+    """Default sample preprocessing before feeding to the model at evaluation.
+
+    Note that this is different than training and testing versions, as data is
+    received directly, not as a (input, output) tuple."""
+    data = data.to(self.device)
+    return data
+
+  def forward_eval(self, data):
+    """Default forward pass during evaluation.
+
+    Note that this is different than training and testing versions, as data is
+    received directly, not as a (input, output) tuple.
+    """
+    return self.forward(data)
+
+  def postprocess(self, result):
+    """Default sample postprocessing after evaluation."""
+    return result
+
+  def eval(self, sample):
+    """Default evaluation meta-algorithm."""
+    sample = self.prepare_eval(sample)
+    result = self.forward_eval(sample)
+    result = self.postprocess(result)
+    return result
+
+  def eval_path(self, input_path, output_path):
+    """Master algorithm for full evaluation, as executed by the CLI."""
+    # Get ready...
+    self.load_model()
+    self.model.to(self.device)
+    # ...and run
+    sample = self.load_sample(input_path)
+    result = self.eval(sample)
+    self.store_result(result, output_path)
+
+
+class PytorchTask(PytorchEvaluable, PytorchTestable, PytorchTrainable, BaseTask):
   """Basic, abstract skeleton of a PyTorch-based ML model.
 
   Following the basic assumption, there are 3 "states" that a model can be in.
