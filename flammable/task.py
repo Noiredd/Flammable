@@ -119,7 +119,7 @@ class BaseTask():
 
   def cli_parse(self):
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(prog='MAGEM')
+    parser = argparse.ArgumentParser(prog='FLAMMABLE')
     parser.add_argument('command', choices=['train', 'test', 'eval'])
     parser.add_argument('infile', nargs='?', help="[Evaluation only]\
       Path to the input file.")
