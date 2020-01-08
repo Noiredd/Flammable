@@ -84,10 +84,14 @@ class BaseTask():
       * "train":  if there were changes in task code, commit them, create a new
                   snapshot, and start training; otherwise exit, unless some
                   special flag (--retrain, --force) was passed,
-      * "test":   if the current version of the code has a corresponding and
-                  trained but untested snapshot, test it; otherwise exit,
-                  unless some special flag (--retest, --ignore) was passed,
-      * "eval":   TBD
+      * "test":   if there were no changes in task code, or a special --ignore
+                  flag was passed, get the last snapshot and test it; otherwise
+                  exit,
+                  TODO: keep task state (e.g. initialized, trained, tested, not
+                  tested etc.) to ensure we're not testing an untrained model;
+                  TODO: reintroduce --retest flag;
+      * "eval":   logic is the same as in "test",
+                  TODO: rework after completing the above 2 todos;
       * "server": TBD
       + "amend":  only commits changes (if any) onto an existing snapshot,
       + "status": checks the status of the repository/snapshot,
@@ -106,7 +110,7 @@ class BaseTask():
         raise RuntimeError("Unable to create a new experiment \"{}\".".format(exp_name))
     # Connect the instance with the local repository
     self.experiment.link_local_repo(this_path)
-    # Check what command was requested via CLI
+    # Check which command was requested via CLI
     args = self.cli_parse()
     if args.command == 'train':
       return self.cli_train(args=args, message=message)
@@ -125,13 +129,12 @@ class BaseTask():
       Path to the input file.")
     parser.add_argument('outfile', nargs='?', help="[Evaluation only]\
       Path to the output file.")
-    parser.add_argument('other', nargs='*')
-    parser.add_argument('--retrain', action='store_true', help="[Training\
-      only] Reset the existing snapshot and train it from scratch.")
-    parser.add_argument('--force', action='store_true', help="[Training only]\
+    parser.add_argument('other', nargs='*', help='(unused)')
+    tflags = parser.add_mutually_exclusive_group(required=False)
+    tflags.add_argument('--retrain', action='store_true', help="[Training only]\
+      Reset the existing snapshot and train it from scratch.")
+    tflags.add_argument('--force', action='store_true', help="[Training only]\
       Create a new snapshot even if there were no changes in the code.")
-    parser.add_argument('--retest', action='store_true', help="[Testing only]\
-      Test the snapshot again, overwriting the previous results.")
     parser.add_argument('--ignore', action='store_true', help="[Testing only]\
       Ignore that the code was changed since the training, test anyway.")
     return parser.parse_args()
@@ -197,7 +200,7 @@ class BaseTask():
     else:
       print("Changes detected. Which snapshot do you wish to test?",
             "If you wish to test the last snapshot, run with --ignore.",
-            "If you wish to test some other snapshot, use the python API to " +
+            "If you wish to test some other snapshot, use the python API to",
             "select and import it, and call its test() method.")
 
   def cli_eval(self, args):
@@ -215,7 +218,7 @@ class BaseTask():
     else:
       print("Changes detected. Which snapshot do you wish to evaluate?",
             "If you wish to eval the last snapshot, run with --ignore.",
-            "If you wish to eval some other snapshot, use the python API to " +
+            "If you wish to eval some other snapshot, use the python API to",
             "select and import it, and call its eval() or eval_path() method.")
 
   def api_main(self):
