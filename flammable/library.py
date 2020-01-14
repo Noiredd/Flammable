@@ -1,17 +1,18 @@
 import os
 
-from .config import config
+from .config import Config
 from .experiment import Experiment
 
 class Library():
   """Controls and owns all the experiments.
 
   Each experiment has its own folder in the storage (storage_path).
-  Layouts of those folders are defined in the class Experiment.
+  Layout of this folder is defined in the Experiment class itself.
   """
   def __init__(self):
     """Load all the experiments."""
-    self.storage_path = config['data_path']
+    self.config = Config()
+    self.storage_path = self.config['data_path']
     self.experiments = self.load_experiments()
 
   def load_experiments(self):
@@ -40,6 +41,8 @@ class Library():
 
 
 library = Library()
-# Simple prevention against double-instantiating/
-# Of course, you can still do lib2 = library.__class__() but... why?
+
+# Simple prevention against double instantiation. Of course, one can still do
+#   lib2 = library.__class__()
+# but... why?
 del Library
