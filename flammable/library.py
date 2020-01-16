@@ -13,7 +13,8 @@ class Library():
     """Load all the experiments."""
     self.config = Config()
     self.storage_path = self.config['data_path']
-    self.experiments = self.load_experiments()
+    self.experiments = {}
+    self.load_experiments()
 
   def load_experiments(self):
     """Load experiments from every folder found in the storage_path."""
@@ -26,7 +27,7 @@ class Library():
         continue
       else:
         experiments[name] = experiment
-    return experiments
+    self.experiments = experiments
 
   def add_experiment(self, name):
     """Create a new experiment with a given name."""

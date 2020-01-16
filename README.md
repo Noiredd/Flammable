@@ -4,6 +4,8 @@ Flammable is a **f**ramework of machine **l**earning **a**bstractions for **m**o
 TLDR: build your experiment by defining only specific functions in abstract algorithms for basic tasks
 and then have Git snapshot your code, automatically matching it with any artifacts it produces.
 
+Skip to [installation instructions](docs/installation.md) or [notes for developers](docs/developers.md).
+
 ## Basics
 There are two root assumptions behind Flammable.
 1. Your machine learning experiments are code, and code *evolves* over time, producing different but important results every time.  
